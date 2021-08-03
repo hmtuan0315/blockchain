@@ -1,7 +1,7 @@
 import datetime
 import hashlib
 import json
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import requests
 from uuid import uuid4
 from urllib.parse import urlparse
@@ -105,7 +105,7 @@ def mine_block():
     prev_proof = prev_block['proof']
     proof = blockchain.proof_of_work(prev_proof)
     prev_hash = blockchain.hash(prev_block)
-    blockchain.add_transaction(sender=node_address, receiver='Tuan', amount=1)
+    blockchain.add_transaction(sender=node_address, receiver='Mai', amount=1)
 
     block = blockchain.create_block(proof, prev_hash)
     response = {'message': "Create successfully",
@@ -113,7 +113,7 @@ def mine_block():
                 'timestamp': block['timestamp'],
                 'proof': block['proof'],
                 'prev_hash': block['prev_hash'],
-                'transactions': block['transations']}
+                'transactions': block['transactions']}
     return jsonify(response)
 
 @app.route('/get_chain', methods = ['GET'])
@@ -122,4 +122,48 @@ def get_chain():
                 'length': len(blockchain.chain)}
     return jsonify(response), 200
 
-app.run(host='0.0.0.0', port = 5000)
+@app.route('/is_valid', methods = ['GET'])
+def is_valid():
+    is_valid = blockchain.is_chain_valid(blockchain.chain)
+    if is_valid:
+        response = {'mess': "It works"}
+    else:
+        response = {'mess': "The blockchain is not valid"}
+
+@app.route('/add_transaction', methods = ['POST'])
+def add_transaction():
+    json = request.get_json()
+    transaction_keys = {'sender', 'receiver', 'amount'}
+    if not all (key in json for key in transaction_keys):
+        return 'Some keys of a transaction are missing', 400
+    index = blockchain.add_transaction(json['sender'], json['receiver'], json['amount'])
+    response = {'mess': f'This transaction will be added to block {index}'}
+    return jsonify(response), 201
+
+# connecting new nodes
+@app.route('/connect_node', methods=['POST'])
+def connect_node():
+    json = request.get_json()
+    nodes = json.get('nodes')
+    if nodes is None:
+        return "No node", 400
+    for node in nodes:
+        blockchain.add_node(node)
+    response = {'mess': 'All nodes are now connected',
+                'total_nodes': list(blockchain.nodes)}
+    return jsonify(response), 201
+
+# replacing the chain by the longest chain if needed
+@app.route('/replace_chain', methods = ['GET'])
+def replace_chain():
+    is_chain_replace = blockchain.replace_chain()
+    if is_chain_replace:
+        response = {'mess: the chain was replaced by the longest chain'
+                    'new_chain': blockchain.chain}
+    else:
+        response = {"mess": 'all good, the chian is the largest one',
+                    'actual_chain': blockchain.chain}
+
+    return jsonify(response), 200
+
+app.run(host='0.0.0.0', port = 5002)
